@@ -26,7 +26,7 @@ export default async function PublicProfilePage({ params }) {
     <main style={styles.page}>
       <section style={styles.hero}>
         <div style={styles.avatar}>
-          {profile.full_name?.charAt(0)?.toUpperCase() || username.charAt(0).toUpperCase()}
+          {profile.display_name?.charAt(0)?.toUpperCase() || username.charAt(0).toUpperCase()}
         </div>
 
         <h1 style={styles.title}>
