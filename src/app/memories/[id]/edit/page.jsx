@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '../../../lib/supabaseClient';
+import { useParams, useRouter } from 'next/navigation';
+import { supabase } from '../../../../lib/supabaseClient';
 
-export default function NewMemoryPage() {
+export default function EditMemoryPage() {
+  const params = useParams();
   const router = useRouter();
 
   const [user, setUser] = useState(null);
@@ -23,31 +24,49 @@ export default function NewMemoryPage() {
   });
 
   useEffect(() => {
-    async function checkUser() {
+    async function loadMemory() {
       const {
         data: { user },
-        error,
       } = await supabase.auth.getUser();
 
-      if (error || !user) {
+      if (!user) {
         router.push('/login');
         return;
       }
 
       setUser(user);
+
+      const { data, error } = await supabase
+        .from('memories')
+        .select('*')
+        .eq('id', params.id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (error || !data) {
+        router.push('/dashboard');
+        return;
+      }
+
+      setForm({
+        title: data.title || '',
+        content: data.content || '',
+        privacy: data.privacy || 'private',
+        mood: data.mood || '',
+        category: data.category || '',
+        location: data.location || '',
+        memory_date: data.memory_date || '',
+      });
+
       setLoading(false);
     }
 
-    checkUser();
-  }, [router]);
+    if (params?.id) loadMemory();
+  }, [params, router]);
 
   function handleChange(e) {
     const { name, value } = e.target;
-
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   }
 
   async function handleSubmit(e) {
@@ -61,9 +80,9 @@ export default function NewMemoryPage() {
       return;
     }
 
-    const { error } = await supabase.from('memories').insert([
-      {
-        user_id: user.id,
+    const { error } = await supabase
+      .from('memories')
+      .update({
         title: form.title,
         content: form.content,
         privacy: form.privacy,
@@ -71,27 +90,24 @@ export default function NewMemoryPage() {
         category: form.category || null,
         location: form.location || null,
         memory_date: form.memory_date || null,
-      },
-    ]);
+      })
+      .eq('id', params.id)
+      .eq('user_id', user.id);
 
     if (error) {
       console.error(error);
-      setMessage('Anı kaydedilemedi. Supabase tablo veya RLS ayarlarını kontrol etmeliyiz.');
+      setMessage('Anı güncellenemedi. Supabase update policy eksik olabilir.');
       setSaving(false);
       return;
     }
 
-    setMessage('Anı başarıyla kaydedildi.');
-
-    setTimeout(() => {
-      router.push('/dashboard');
-    }, 900);
+    router.push(`/memories/${params.id}`);
   }
 
   if (loading) {
     return (
       <main style={styles.page}>
-        <p style={styles.loading}>DIARYNITY hazırlanıyor...</p>
+        <p style={styles.loading}>Düzenleme sayfası hazırlanıyor...</p>
       </main>
     );
   }
@@ -99,46 +115,24 @@ export default function NewMemoryPage() {
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <p style={styles.badge}>YENİ ANI</p>
-
-        <h1 style={styles.title}>Bugünden bir iz bırak</h1>
-
-        <p style={styles.subtitle}>
-          Bu alan, hayatının küçük ya da büyük anlarını saklamak için ilk gerçek kayıt ekranıdır.
-        </p>
+        <p style={styles.badge}>ANIYI DÜZENLE</p>
+        <h1 style={styles.title}>Anını güncelle</h1>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <label style={styles.label}>
             Başlık
-            <input
-              name="title"
-              value={form.title}
-              onChange={handleChange}
-              placeholder="Örneğin: Luzern’de sessiz bir sabah"
-              style={styles.input}
-            />
+            <input name="title" value={form.title} onChange={handleChange} style={styles.input} />
           </label>
 
           <label style={styles.label}>
             Anı Metni
-            <textarea
-              name="content"
-              value={form.content}
-              onChange={handleChange}
-              placeholder="Bugün ne yaşandı? Ne hissettin? Bu anı neden saklamak istiyorsun?"
-              style={styles.textarea}
-            />
+            <textarea name="content" value={form.content} onChange={handleChange} style={styles.textarea} />
           </label>
 
           <div style={styles.grid}>
             <label style={styles.label}>
               Gizlilik
-              <select
-                name="privacy"
-                value={form.privacy}
-                onChange={handleChange}
-                style={styles.input}
-              >
+              <select name="privacy" value={form.privacy} onChange={handleChange} style={styles.input}>
                 <option value="private">Özel</option>
                 <option value="public">Açık</option>
                 <option value="pin">PIN Korumalı</option>
@@ -147,61 +141,22 @@ export default function NewMemoryPage() {
 
             <label style={styles.label}>
               Ruh Hali
-              <select
-                name="mood"
-                value={form.mood}
-                onChange={handleChange}
-                style={styles.input}
-              >
-                <option value="">Seç</option>
-                <option value="peaceful">Huzurlu</option>
-                <option value="happy">Mutlu</option>
-                <option value="sad">Hüzünlü</option>
-                <option value="hopeful">Umutlu</option>
-                <option value="nostalgic">Nostaljik</option>
-              </select>
+              <input name="mood" value={form.mood} onChange={handleChange} style={styles.input} />
             </label>
 
             <label style={styles.label}>
               Kategori
-              <select
-                name="category"
-                value={form.category}
-                onChange={handleChange}
-                style={styles.input}
-              >
-                <option value="">Seç</option>
-                <option value="today">Bugün</option>
-                <option value="childhood">Çocukluk</option>
-                <option value="family">Aile</option>
-                <option value="travel">Yolculuklar</option>
-                <option value="love">Aşk</option>
-                <option value="success">Başarılar</option>
-                <option value="hard_days">Zor Günler</option>
-                <option value="private_notes">Özel Notlar</option>
-              </select>
+              <input name="category" value={form.category} onChange={handleChange} style={styles.input} />
             </label>
 
             <label style={styles.label}>
               Yer
-              <input
-                name="location"
-                value={form.location}
-                onChange={handleChange}
-                placeholder="Örneğin: Luzern"
-                style={styles.input}
-              />
+              <input name="location" value={form.location} onChange={handleChange} style={styles.input} />
             </label>
 
             <label style={styles.label}>
               Anı Tarihi
-              <input
-                type="date"
-                name="memory_date"
-                value={form.memory_date}
-                onChange={handleChange}
-                style={styles.input}
-              />
+              <input type="date" name="memory_date" value={form.memory_date} onChange={handleChange} style={styles.input} />
             </label>
           </div>
 
@@ -209,15 +164,11 @@ export default function NewMemoryPage() {
 
           <div style={styles.actions}>
             <button type="submit" disabled={saving} style={styles.primaryButton}>
-              {saving ? 'Kaydediliyor...' : 'Anıyı Kaydet'}
+              {saving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard')}
-              style={styles.secondaryButton}
-            >
-              Dashboard’a Dön
+            <button type="button" onClick={() => router.push(`/memories/${params.id}`)} style={styles.secondaryButton}>
+              Vazgeç
             </button>
           </div>
         </form>
@@ -229,8 +180,7 @@ export default function NewMemoryPage() {
 const styles = {
   page: {
     minHeight: '100vh',
-    background:
-      'linear-gradient(135deg, #fff7f1 0%, #f7e6dc 45%, #ead1c5 100%)',
+    background: 'linear-gradient(135deg, #fff7f1 0%, #f7e6dc 45%, #ead1c5 100%)',
     padding: '34px',
     color: '#3b2a24',
   },
@@ -238,31 +188,23 @@ const styles = {
     width: '100%',
     maxWidth: '980px',
     margin: '0 auto',
-    background: 'rgba(255, 255, 255, 0.74)',
-    border: '1px solid rgba(120, 80, 65, 0.16)',
+    background: 'rgba(255,255,255,0.74)',
+    border: '1px solid rgba(120,80,65,0.16)',
     borderRadius: '28px',
     padding: '38px',
-    boxShadow: '0 28px 80px rgba(80, 45, 30, 0.14)',
+    boxShadow: '0 28px 80px rgba(80,45,30,0.14)',
   },
   badge: {
     fontSize: '12px',
     letterSpacing: '0.18em',
     color: '#9b6b5b',
-    marginBottom: '14px',
     fontWeight: 700,
   },
   title: {
     fontSize: '36px',
-    margin: '0 0 12px',
+    margin: '12px 0 28px',
     fontFamily: 'Georgia, serif',
     fontWeight: 500,
-  },
-  subtitle: {
-    fontSize: '16px',
-    lineHeight: 1.8,
-    color: '#6f554c',
-    maxWidth: '680px',
-    marginBottom: '30px',
   },
   form: {
     display: 'flex',
@@ -283,8 +225,7 @@ const styles = {
     fontWeight: 600,
   },
   input: {
-    width: '100%',
-    border: '1px solid rgba(120, 80, 65, 0.18)',
+    border: '1px solid rgba(120,80,65,0.18)',
     borderRadius: '16px',
     padding: '14px 15px',
     fontSize: '15px',
@@ -293,9 +234,8 @@ const styles = {
     outline: 'none',
   },
   textarea: {
-    minHeight: '210px',
-    width: '100%',
-    border: '1px solid rgba(120, 80, 65, 0.18)',
+    minHeight: '260px',
+    border: '1px solid rgba(120,80,65,0.18)',
     borderRadius: '18px',
     padding: '16px',
     fontSize: '16px',
@@ -309,7 +249,6 @@ const styles = {
     display: 'flex',
     gap: '14px',
     flexWrap: 'wrap',
-    marginTop: '4px',
   },
   primaryButton: {
     border: 'none',
@@ -321,7 +260,7 @@ const styles = {
     cursor: 'pointer',
   },
   secondaryButton: {
-    border: '1px solid rgba(123, 74, 58, 0.28)',
+    border: '1px solid rgba(123,74,58,0.28)',
     borderRadius: '999px',
     padding: '14px 24px',
     background: 'transparent',
@@ -332,7 +271,7 @@ const styles = {
   message: {
     padding: '14px 16px',
     borderRadius: '16px',
-    background: 'rgba(123, 74, 58, 0.08)',
+    background: 'rgba(123,74,58,0.08)',
     color: '#7b4a3a',
     fontSize: '14px',
   },
